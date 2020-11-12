@@ -405,7 +405,7 @@ server <- function(input, output, session) {
     content = function(file){
       
       
-      temp <- summary_table() %>% as_tibble()
+      temp <- modified_appearance() %>% as_tibble()
       
       wb <- createWorkbook()
       addWorksheet(wb, "summarised_table")
@@ -421,7 +421,7 @@ server <- function(input, output, session) {
     content = function(file){
       
       
-      temp <- summary_table() %>% as_tibble()
+      temp <- modified_appearance() %>% as_tibble()
       write_csv(temp,file)
     }
   )
