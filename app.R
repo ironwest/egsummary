@@ -14,6 +14,7 @@ library(tibble)
 library(tidyr)
 library(rlang)
 library(rmarkdown)
+library(flextable)
 
 choices_add_p_test <- c(
   "t.test","aov","wilcox.test","kruskal.test",
@@ -31,6 +32,15 @@ input_file <- fileInput(
 
 #Setting for sidebar panel--------------------------------------------
 setting_by <- selectInput("by", label = "Group By", choices = NA)
+
+# setting_variables <- pickerInput(
+#   inputId = "var",
+#   label = "Select Variables", 
+#   choices = NA,
+#   options = list(
+#     `actions-box` = TRUE), 
+#   multiple = TRUE
+# )
 
 setting_statistics <- div(
   textInput(
@@ -88,8 +98,8 @@ dropdown_modify_label <- dropdownButton(
 
 #dlbuttons -------------------------------------
 
-dlbutton_excel <- downloadButton("dltable_excel", "DL(Excel)")
-dlbutton_csv <- downloadButton("dltable_csv", "DL(CSV)")
+dlbutton_excel <- downloadButton("dltable_word", "DL(Word)")
+dlbutton_csv <- downloadButton("dltable_csv", "DL(CSV)(data only)")
 dlbutton_html <- downloadButton("dltable_html", "DL(HTML)")
 
 #modify appearance------------------------------
@@ -101,14 +111,17 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      fluidRow("This app uses gtsummary package of R"),
-      hr(),
       input_file,
+      # setting_variables,
       setting_by,
       setting_statistics,
       setting_digits,
       setting_missingtext,
-      fluidRow(dlbutton_excel, dlbutton_csv, dlbutton_html)
+      fluidRow(dlbutton_excel, dlbutton_csv, dlbutton_html),
+      hr(),
+      p("This app uses following great packages! gt, gtsummary, readr, magrittr, dplyr, shiny, openxlsx, shinycssloaders, shinyjs, shinyWidgets, purrr, stringr, tibble, tidyr, rlang, rmarkdown and flextable."),
+      hr(),
+      fluidRow(a("Script for this app is placed in here", href = "https://github.com/ironwest/egsummary"))
     ),
     
     mainPanel(
@@ -118,8 +131,8 @@ ui <- fluidPage(
       ),
       fluidRow(
         uiOutput("header"),
-        prettyCheckbox("bold_label", "Bold Label"),
-        textInput("footnote","Statistics footnote", "Statistics presented: Mean(SD); n / N (%)")
+        prettyCheckbox("bold_label", "Bold Label")
+        # uiOutput("footer")
       )
     )
   )
@@ -127,8 +140,9 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
-  hide("dltable_excel")
+  hide("dltable_word")
   hide("dltable_csv")
+  hide("var")
   hide("by")
   hide("add_p_condition")
   hide("add_p_categorical")
@@ -144,7 +158,7 @@ server <- function(input, output, session) {
   hide("drop_down_modify_label")
   hide("dltable_html")
   hide("bold_label")
-  hide("footnote")
+  hide("footnote_p")
   
   #UI show/hide logic --------------------------------
   observeEvent(input$by,{
@@ -219,9 +233,10 @@ server <- function(input, output, session) {
   
   observeEvent(input$file, {
     
-    show("dltable_excel")
+    show("dltable_word")
     show("dltable_csv")
     show("dltable_html")
+    show("var")
     show("by")
     show("statistics_categorical")
     show("statistics_continuous")
@@ -234,6 +249,13 @@ server <- function(input, output, session) {
     
     column_vector <- dat() %>% colnames()
     
+    # updatePickerInput(
+    #   session = session,
+    #   inputId = "var",
+    #   choices = column_vector, 
+    #   selected = column_vector
+    # )
+    
     updateSelectInput(
       session = session,
       inputId = "by",
@@ -244,8 +266,9 @@ server <- function(input, output, session) {
   dat <- reactive({
     req(input$file)
     
-    read_csv(input$file$datapath)
+    res <- read_csv(input$file$datapath)
     
+    return(res)
   })
   
   summary_table <- reactive({
@@ -347,16 +370,14 @@ server <- function(input, output, session) {
         modify_spanning_header(
           starts_with("stat_") ~ input$spanning_header
         )
-    }zzzz
+    }
     
     if(input$bold_label){
       fin <- fin %>% 
         bold_labels()
     }
     
-    fin <- fin %>% 
-      modify_footnote(update = starts_with("stat_") ~ input$footnote) %>% 
-      modify_footnote(update = p.value ~ "PPPPPP")
+    
     
     return(fin)
   })
@@ -388,38 +409,49 @@ server <- function(input, output, session) {
     return(head_ui)
   })
   
+  # output$footer <- renderUI({
+  #   req(header_names())
+  #   hd <- header_names()
+  #   length_hd <- nrow(hd)
+  #   
+  #   if("p.value" %in% hd$column){
+  #     p_label <- modified_appearance()$table_header %>% 
+  #       filter(column == "p.value") %>% 
+  #       pull(footnote)
+  #     
+  #     show("footnote_p")
+  #   }else{
+  #     p_label <- ""
+  #     hide("footnote_p")
+  #   }
+  #   
+  #   footer_ui <- fluidRow(
+  #     column(width = 4,
+  #            textInput("footnote"  ,"1) Statistics footnote", "Statistics presented: Mean(SD); n / N (%)"),
+  #            textInput("footnote_p","2) P-value footnote"   , p_label)
+  #     )
+  #   )
+  #   
+  # })
   
   #Output---------------------------
   output$table1 <- gt::render_gt({
     req(input$file)
-    
-    
     modified_appearance() %>% as_gt()
   })
   
   #DL button logic--------------------------------------
   
-  output$dltable_excel <- downloadHandler(
-    filename = function() {"table1.xlsx"},
+  output$dltable_word <- downloadHandler(
+    filename = function() {"table1.docx"},
     content = function(file){
-      
-      
-      temp <- modified_appearance() %>% as_tibble()
-      
-      wb <- createWorkbook()
-      addWorksheet(wb, "summarised_table")
-      writeDataTable(wb, "summarised_table", temp)
-      
-      saveWorkbook(wb, file)
-      
+      render("word_template.Rmd", output_file = file)
     }
   )
   
   output$dltable_csv <- downloadHandler(
     filename = function() {"table1.csv"},
     content = function(file){
-      
-      
       temp <- modified_appearance() %>% as_tibble()
       write_csv(temp,file)
     }
