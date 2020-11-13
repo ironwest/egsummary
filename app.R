@@ -33,14 +33,14 @@ input_file <- fileInput(
 #Setting for sidebar panel--------------------------------------------
 setting_by <- selectInput("by", label = "Group By", choices = NA)
 
-# setting_variables <- pickerInput(
-#   inputId = "var",
-#   label = "Select Variables", 
-#   choices = NA,
-#   options = list(
-#     `actions-box` = TRUE), 
-#   multiple = TRUE
-# )
+setting_variables <- pickerInput(
+  inputId = "var",
+  label = "Select Variables",
+  choices = NA,
+  options = list(
+    `actions-box` = TRUE),
+  multiple = TRUE
+)
 
 setting_statistics <- div(
   textInput(
@@ -112,7 +112,7 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       input_file,
-      # setting_variables,
+      setting_variables,
       setting_by,
       setting_statistics,
       setting_digits,
@@ -129,10 +129,16 @@ ui <- fluidPage(
         column(width = 2 , dropdown_add_column, hr(),dropdown_modify_label),
         column(width = 10, shinycssloaders::withSpinner(gt::gt_output("table1")))
       ),
+      hr(),
       fluidRow(
-        uiOutput("header"),
-        prettyCheckbox("bold_label", "Bold Label")
-        # uiOutput("footer")
+        h3("Header setting:"),
+        column(uiOutput("header"),width = 6),
+        column(prettyCheckbox("bold_label", "Bold Label"), width = 6)
+      ),
+      hr(),
+      fluidRow(
+        h3("Column Type setting:"),
+        uiOutput("set_column_type")
       )
     )
   )
@@ -229,6 +235,22 @@ server <- function(input, output, session) {
     return(res)
   })
   
+  observeEvent(label_vector(), {
+    
+    updatePickerInput(
+      session = session,
+      inputId = "var",
+      choices = label_vector(),
+      selected = label_vector()
+    )
+    
+    updateSelectInput(
+      session = session,
+      inputId = "by",
+      choices = c(NA_character_, label_vector())
+    )
+  })
+  
   #data logic ---------------------------------------
   
   observeEvent(input$file, {
@@ -249,12 +271,12 @@ server <- function(input, output, session) {
     
     column_vector <- dat() %>% colnames()
     
-    # updatePickerInput(
-    #   session = session,
-    #   inputId = "var",
-    #   choices = column_vector, 
-    #   selected = column_vector
-    # )
+    updatePickerInput(
+      session = session,
+      inputId = "var",
+      choices = column_vector,
+      selected = column_vector
+    )
     
     updateSelectInput(
       session = session,
@@ -271,10 +293,29 @@ server <- function(input, output, session) {
     return(res)
   })
   
-  summary_table <- reactive({
+  data_manipulation <- reactive({
     req(dat())
     
-    table_data <- dat()
+    base_dat <- dat()
+    
+    if(is.null(input$var)){
+      manipulated_dat <- base_dat %>% 
+        slice(0)
+    }else{
+      
+      manipulated_dat <- base_dat %>% 
+        select(input$var)
+    }
+    
+    return(manipulated_dat)
+
+  })
+  
+  summary_table <- reactive({
+    req(dat())
+    req(data_manipulation())
+    
+    table_data <- data_manipulation()
     
     #rename data column----------------------
     vector_for_rename <- tryCatch(
@@ -291,7 +332,7 @@ server <- function(input, output, session) {
       table_data <- table_data %>% 
         rename(vector_for_rename)
     }
-    
+    print("point:A")
     #set by name depend on renamed vector----------------
     if(input$by == "NA"){
       set_by <- NULL
@@ -305,9 +346,11 @@ server <- function(input, output, session) {
     
     
     #Tbl summary-----------------------------------
+    
     final_table <- tbl_summary(
       data = table_data,
       by = set_by,
+      type = type_argument(),
       statistic = list(
         all_continuous()   ~ input$statistics_continuous,
         all_categorical() ~ input$statistics_categorical
@@ -316,6 +359,12 @@ server <- function(input, output, session) {
       missing_text = input$missing_text
     )
     
+    # ddd <- tibble(a = 1:10, b = 1:10)
+    # tbl_summary(ddd, type = list(a = "continuous", b = "categorical"))
+    # tbl_summary(ddd, type = list("a" = "continuous", "b" = "categorical"))
+    # 
+    # ttt <- as.list(c("continuous","categorical")) %>% set_names(c("a","b"))
+    # tbl_summary(ddd, type =ttt)
     
     #Add columns --------------------------------------------
     if(input$add_p_condition){
@@ -340,6 +389,53 @@ server <- function(input, output, session) {
     return(final_table)
   })
   
+  #generate ui for column_type_setting------------------
+  
+  setting_table <- reactive({
+    req(data_manipulation())
+    
+    current_data <- data_manipulation()
+    
+    settings <- enframe(map(current_data, typeof)) %>% 
+      unnest(value) %>% 
+      mutate(type = case_when(
+        value %in% c("double","integer") ~ "continuous",
+        value %in% c("factor","character") ~ "categorical"
+      )) %>% 
+      mutate(id = str_c("type_",1:n()))
+    
+    return(settings)
+  })
+  
+  output$set_column_type <- renderUI({
+    req(setting_table())
+    settings <- setting_table()
+    
+    finui <- column(width = 6,pmap(.l = list(settings$id, settings$name, settings$type), ~{
+      radioGroupButtons(
+        inputId  = ..1, 
+        label    = ..2, 
+        choices  = c("categorical","continuous"), 
+        selected = ..3, 
+        justified = TRUE
+      )  
+    }))
+    
+    return(finui)
+  })
+  
+  type_argument <- reactive({
+    req(setting_table())
+    
+    settings <- setting_table()
+    
+    settings <- settings %>% 
+      mutate(current_val = map_chr(id, ~{input[[.]]}))
+    
+    as.list(settings$current_val) %>% set_names(settings$name) %>% 
+      return()
+    
+  })
   
   #modify appearance----------------------------
   header_names <- reactive({
