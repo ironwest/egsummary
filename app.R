@@ -119,7 +119,7 @@ ui <- fluidPage(
       fluidRow(
         uiOutput("header"),
         prettyCheckbox("bold_label", "Bold Label"),
-        uiOutput("footnote")
+        textInput("footnote","Statistics footnote", "Statistics presented: Mean(SD); n / N (%)")
       )
     )
   )
@@ -144,6 +144,7 @@ server <- function(input, output, session) {
   hide("drop_down_modify_label")
   hide("dltable_html")
   hide("bold_label")
+  hide("footnote")
   
   #UI show/hide logic --------------------------------
   observeEvent(input$by,{
@@ -229,6 +230,7 @@ server <- function(input, output, session) {
     show("drop_down_add_column")
     show("drop_down_modify_label")
     show("bold_label")
+    show("footnote")
     
     column_vector <- dat() %>% colnames()
     
@@ -345,15 +347,16 @@ server <- function(input, output, session) {
         modify_spanning_header(
           starts_with("stat_") ~ input$spanning_header
         )
-    }
+    }zzzz
     
     if(input$bold_label){
       fin <- fin %>% 
         bold_labels()
     }
     
-    
-    
+    fin <- fin %>% 
+      modify_footnote(update = starts_with("stat_") ~ input$footnote) %>% 
+      modify_footnote(update = p.value ~ "PPPPPP")
     
     return(fin)
   })
@@ -383,10 +386,6 @@ server <- function(input, output, session) {
     )
     
     return(head_ui)
-  })
-  
-  output$footnote <- renderUI({
-    
   })
   
   
