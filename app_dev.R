@@ -254,7 +254,7 @@ server <- function(input, output, session) {
     
     return(res)
   })
-  
+
   #Update Var and By select input----------------------
   observeEvent(dat(), {
     
@@ -471,7 +471,7 @@ server <- function(input, output, session) {
       fin <- fin %>% 
         bold_labels()
     }
-    
+  
     return(fin)
   })
   
@@ -495,8 +495,8 @@ server <- function(input, output, session) {
     }
     
     head_ui <- column(width = 12,
-                      textInput("label","Label",label_text),
-                      textInput("spanning_header", "Spanning Header", spanning_header_text)
+      textInput("label","Label",label_text),
+      textInput("spanning_header", "Spanning Header", spanning_header_text)
     )
     
     return(head_ui)
