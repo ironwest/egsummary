@@ -30,6 +30,16 @@ input_file <- fileInput(
              ".csv")
 )
 
+
+set_csv_delimiter <- awesomeRadio(
+  inputId = "set_csv_delimiter",
+  label = "CSV Delimiter:", 
+  choices = list(",(comma)" = ",", ";(semi-colon)" = ";", "\t(tab)" = "\t"),
+  selected = ",",
+  inline = TRUE, 
+  status = "success"
+)
+
 #Setting for sidebar panel--------------------------------------------
 setting_by <- selectInput("by", label = "Group By", choices = NA)
 
@@ -132,6 +142,7 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       input_file,
+      set_csv_delimiter,
       setting_variables,
       setting_by,
       setting_statistics,
@@ -303,7 +314,7 @@ server <- function(input, output, session) {
   dat <- reactive({
     req(input$file)
     
-    res <- read_csv(input$file$datapath)
+    res <- read_delim(input$file$datapath, delim = input$set_csv_delimiter)
     
     return(res)
   })
@@ -568,10 +579,10 @@ server <- function(input, output, session) {
         str_c("list(\n",.,"\n  )")
     }
     
-    #_add columns------------
+    #_add header------------
     
     if(!is.null(input$label)){
-      add1 <- "summarised_table <- summarised_table %>% \n  modify_header(label = '{input$label}')\n"
+      add1 <- "summarised_table <- summarised_table %>% \n  modify_header(label = '{input$label}')\n\n"
     }else{
       add1 <- ""
     }
@@ -581,25 +592,58 @@ server <- function(input, output, session) {
     }else if(input$spanning_header == ""){
       add2 <- ""
     }else{
-      add2 <- "summarised_table <- summarised_table %>% \n  modify_spanning_header(starts_with('stat_') ~ '{input$spanning_header}')\n"
+      add2 <- "summarised_table <- summarised_table %>% \n  modify_spanning_header(starts_with('stat_') ~ '{input$spanning_header}')\n\n"
     }
     
     if(input$bold_label){
-      add3 <- "summarised_table <- summarised_table %>% \n  bold_labels()"
+      add3 <- "summarised_table <- summarised_table %>% \n  bold_labels()\n\n"
     }else{
       add3 <- ""
     }
     
-    add_columns <- c(add1,add2,add3) %>% str_c(collapse = "")
+    add_header <- c(add1,add2,add3) %>% str_c(collapse = "")
     
-    #modify_headers <- "HEAD"
+    #_add columns----------------------------
+    if(input$add_p_condition){
+      add_col1_1 <- "summarised_table <- summarised_table %>% \n"
+      add_col1_2 <- "  add_p(test = list(all_continuous()  ~ '{input$add_p_continuous}',\n"
+      add_col1_3 <- "                    all_categorical() ~ '{input$add_p_categorical}'))\n\n"
+    }else{
+      add_col1_1 <- ""
+      add_col1_2 <- ""
+      add_col1_3 <- ""
+    }
+    
+    
+    if(input$add_overall_condition){
+      add_col2_1 <- "summarised_table <- summarised_table %>% \n"
+      add_col2_2 <- "  add_overall(last = {input$add_overall_last}, col_label = '{input$add_overall_label}')\n\n"
+    }else{
+      add_col2_1 <- ""
+      add_col2_2 <- ""
+    }
+    
+    if(input$add_n_condition){
+      add_col3_1 <- "summarised_table <- summarised_table %>% add_n()\n\n"
+    }else{
+      add_col3_1 <- ""
+    }
+    
+    add_columns <- c(
+      add_col1_1, add_col1_2, add_col1_3,
+      add_col2_1, add_col2_2,
+      add_col3_1
+    ) %>% 
+      str_c(collapse = "")
     
     base_text <- c(
       "#THIS TEXT IS EXPERIMENTAL AND IS UNDER DEVELOPMENT",
-      "# Read data from csv",
-      "csv_data <- read_csv('<DIR PATH>//{filename}')",
+      "library(tidyverse)",
+      "library(gtsummary)",
+      "# Read data from csv------------------------------------",
+      "csv_data <- read_delim('<DIR PATH>//{filename}', delim = '{input$set_csv_delimiter}')",
       "",
-      "# Make summary table",
+      "# Make summary table-----------------------------------",
       "summarised_table <- tbl_summary(",
       "  data  = csv_data,",
       "  by    = {set_by},",
@@ -613,6 +657,10 @@ server <- function(input, output, session) {
       "  missing_text = '{input$missing_text}'",
       ")",
       "",
+      "#Add Header--------------------------",
+      add_header,
+      "",
+      "#Add column(N, P, Overall)-----------------------------",
       add_columns
     )
     
